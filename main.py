@@ -53,11 +53,11 @@ def set_premium(user_id):
 init_db()
 
 # ===== КАРТИНКИ (URL) =====
-WELCOME_IMG = "https://i.postimg.cc/3ND9ZNT9/images-(9).jpg"  # Замени на свою картинку!
-MENU_IMG = "https://i.postimg.cc/zvW6G0Vh/images-(10).jpg"
-SHOP_IMG = "https://i.postimg.cc/rwq3qGcM/images-(11).jpg"
-RULES_IMG = "https://i.postimg.cc/rwq3qGcM/images-(11).jpg"
-
+# Вместо URL пиши путь к файлу на сервере:
+WELCOME_IMG = "/app/welcome.jpg"
+MENU_IMG = "/app/menu.jpg"
+SHOP_IMG = "/app/shop.jpg"
+RULES_IMG = "/app/rules.jpg"
 # ===== МЕНЮ КОМАНД =====
 async def set_commands():
     commands = [
