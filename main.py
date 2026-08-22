@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import BotCommand, InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice
 
-TOKEN = os.getenv('BOT_TOKEN')
+TOKEN = os.getenv('8614039525:AAHdwesoNheOYGVq3Kq7qIbQ9DY5UNC7PWQ')
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
