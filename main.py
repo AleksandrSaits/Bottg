@@ -7,11 +7,14 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 @dp.message(CommandStart())
-async def cmd_start(message: types.Message):
-    await message.answer("✅ БОТ РАБОТАЕТ! Я запущен на Bothost.")
+async def start(message: types.Message):
+    await message.answer("Привет! Я работаю ✅")
+
+@dp.message()
+async def echo(message: types.Message):
+    await message.answer("Я тебя слышу! Напиши /start")
 
 async def main():
-    print("✅ Бот запущен...")
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
