@@ -54,10 +54,10 @@ init_db()
 
 # ===== КАРТИНКИ (URL) =====
 # Вместо URL пиши путь к файлу на сервере:
-WELCOME_IMG = "/app/welcome.jpg"
-MENU_IMG = "/app/menu.jpg"
-SHOP_IMG = "/app/shop.jpg"
-RULES_IMG = "/app/rules.jpg"
+WELCOME_IMG = "/app/welcome.jpeg"
+MENU_IMG = "/app/menu.jpeg"
+SHOP_IMG = "/app/shop.jpeg"
+RULES_IMG = "/app/rules.jpeg"
 # ===== МЕНЮ КОМАНД =====
 async def set_commands():
     commands = [
