@@ -1,40 +1,220 @@
 import os
+import sqlite3
+import random
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import BotCommand, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import BotCommand, InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice
 
-# Токен из переменных окружения (ты уже закинул его на хостинг)
 TOKEN = os.getenv('BOT_TOKEN')
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# ===== НАСТРОЙКА МЕНЮ КОМАНД (появится в Telegram при нажатии "/") =====
+# ===== БАЗА ДАННЫХ =====
+def init_db():
+    conn = sqlite3.connect('aspekt_economy.db')
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users 
+                      (user_id INTEGER PRIMARY KEY, username TEXT, ac_balance INTEGER, is_premium INTEGER)''')
+    conn.commit()
+    conn.close()
+
+def get_user(user_id, username):
+    conn = sqlite3.connect('aspekt_economy.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.execute("INSERT INTO users (user_id, username, ac_balance, is_premium) VALUES (?, ?, 0, 0)", (user_id, username))
+        conn.commit()
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        user = cursor.fetchone()
+    conn.close()
+    return user
+
+def update_balance(user_id, amount):
+    conn = sqlite3.connect('aspekt_economy.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET ac_balance = ac_balance + ? WHERE user_id = ?", (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def set_premium(user_id):
+    conn = sqlite3.connect('aspekt_economy.db')
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET is_premium = 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ===== МЕНЮ КОМАНД =====
 async def set_commands():
     commands = [
-        BotCommand(command='start', description='Приветствие'),
-        BotCommand(command='help', description='Список команд'),
-        BotCommand(command='rules', description='Правила группы'),
-        BotCommand(command='settings', description='Настройки бота'),
-        BotCommand(command='ban', description='Забанить пользователя'),
-        BotCommand(command='mute', description='Замутить пользователя'),
-        BotCommand(command='warn', description='Предупреждение'),
+        BotCommand(command='start', description='Главное меню'),
+        BotCommand(command='balance', description='Мой баланс Aspekt Coins 🪙'),
+        BotCommand(command='daily', description='Ежедневная награда 🎁'),
+        BotCommand(command='game', description='Игра: Орёл или Решка (ставка 10 🪙)'),
+        BotCommand(command='shop', description='Магазин: покупка AC за Звёзды ⭐️'),
     ]
     await bot.set_my_commands(commands)
 
-# ===== КОМАНДА /start =====
+# ===== ГЛАВНОЕ МЕНЮ =====
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
+    user = get_user(message.from_user.id, message.from_user.username or "User")
+    premium_tag = "👑 [PREMIUM] " if user[3] else ""
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📋 Правила", callback_data="rules")],
-        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
-        [InlineKeyboardButton(text="❓ Помощь", callback_data="help")],
+        [InlineKeyboardButton(text="💰 Мой баланс", callback_data="check_balance")],
+        [InlineKeyboardButton(text="⭐️ Купить Aspekt Coins", callback_data="open_shop")],
+        [InlineKeyboardButton(text="🎲 Играть", callback_data="play_game")],
     ])
     await message.answer(
-        "👋 Привет! Я бот-помощник для групп.\n\n"
-        "Добавь меня в группу и сделай администратором — "
-        "я помогу модерировать чат!",
+        f"👋 Привет, {premium_tag}{message.from_user.full_name}!\n\n"
+        f"Я бот-помощник группы. Копи Aspekt Coins (🪙), играй и покупай привилегии!",
         reply_markup=keyboard
+    )
+
+# ===== ЭКОНОМИКА =====
+@dp.message(Command('balance'))
+@dp.callback_query(F.data == "check_balance")
+async def cmd_balance(event: types.Message | types.CallbackQuery):
+    user_id = event.from_user.id
+    username = event.from_user.username or "User"
+    user = get_user(user_id, username)
+    premium_tag = "👑 " if user[3] else ""
+    
+    text = f"{premium_tag}Твой баланс: **{user[2]} Aspekt Coins (🪙)**"
+    if isinstance(event, types.CallbackQuery):
+        await event.answer(text, show_alert=True)
+    else:
+        await event.answer(text, parse_mode='Markdown')
+
+@dp.message(Command('daily'))
+async def cmd_daily(message: types.Message):
+    # Для простоты пока без проверки времени, даём 5 монет в день (можно усложнить позже)
+    update_balance(message.from_user.id, 5)
+    await message.answer("🎉 Ты получил **5 🪙** на свой баланс!")
+
+@dp.message(Command('game'))
+@dp.callback_query(F.data == "play_game")
+async def cmd_game(event: types.Message | types.CallbackQuery):
+    user_id = event.from_user.id
+    username = event.from_user.username or "User"
+    user = get_user(user_id, username)
+    
+    if user[2] < 10:
+        ans = "❌ Недостаточно монет! Нужно 10 🪙. Купи их в /shop или забери /daily!"
+        if isinstance(event, types.CallbackQuery):
+            await event.answer(ans, show_alert=True)
+        else:
+            await event.answer(ans)
+        return
+    
+    update_balance(user_id, -10)
+    win = random.choice([True, False])
+    
+    if win:
+        update_balance(user_id, 20)
+        ans = "🎲 **Победа!** Ты выиграл 20 🪙! (Чистая прибыль: +10 🪙)"
+    else:
+        ans = "🎲 **Неудача...** Ты потерял 10 🪙."
+        
+    if isinstance(event, types.CallbackQuery):
+        await event.answer(ans, show_alert=True)
+    else:
+        await event.answer(ans, parse_mode='Markdown')
+
+# ===== МАГАЗИН И TELEGRAM STARS =====
+@dp.message(Command('shop'))
+@dp.callback_query(F.data == "open_shop")
+async def cmd_shop(event: types.Message | types.CallbackQuery):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⭐️ 10 AC за 1 Звезду", callback_data="buy_10ac")],
+        [InlineKeyboardButton(text="⭐️ 50 AC за 5 Звёзд", callback_data="buy_50ac")],
+        [InlineKeyboardButton(text="👑 Премиум (100 AC)", callback_data="buy_premium")],
+    ])
+    text = (
+        "🛒 **Магазин Aspekt Shop:**\n\n"
+        "Курс: 1 Telegram Звезда ⭐️ = 10 Aspekt Coins 🪙\n"
+        "👑 **Премиум статус** = 100 🪙\n\n"
+        "Выберите товар ниже:"
+    )
+    
+    if isinstance(event, types.CallbackQuery):
+        await event.message.edit_text(text, parse_mode='Markdown', reply_markup=keyboard)
+    else:
+        await event.answer(text, parse_mode='Markdown', reply_markup=keyboard)
+
+# Обработка нажатия на покупку за звёзды
+@dp.callback_query(F.data.in_(["buy_10ac", "buy_50ac"]))
+async def process_buy_stars(callback: types.CallbackQuery):
+    amount_ac = 10 if callback.data == "buy_10ac" else 50
+    stars_cost = 1 if callback.data == "buy_10ac" else 5
+    
+    # Создаём счёт на оплату в Telegram Stars (валюта "XTR", provider_token="")
+    await callback.message.answer_invoice(
+        title=f"Покупка {amount_ac} Aspekt Coins",
+        description=f"Оплата {stars_cost} Telegram Звёздами ⭐️",
+        payload=f"buy_ac_{amount_ac}", # Это мы проверим при успешной оплате
+        provider_token="", # ВАЖНО: для звёзд должен быть пустым!
+        currency="XTR",    # ВАЖНО: код валюты Telegram Stars
+        prices=[LabeledPrice(label="Aspekt Coins", amount=stars_cost)],
+    )
+    await callback.answer()
+
+# Telegram требует подтвердить платёж перед списанием
+@dp.pre_checkout_query()
+async def on_pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
+    await pre_checkout_q.answer(ok=True)
+
+# Обработка УСПЕШНОЙ оплаты
+@dp.message(F.successful_payment)
+async def on_successful_payment(message: types.Message):
+    payload = message.successful_payment.invoice_payload
+    user_id = message.from_user.id
+    
+    if payload.startswith("buy_ac_"):
+        amount_ac = int(payload.split("_")[2])
+        update_balance(user_id, amount_ac)
+        await message.answer(f"✅ Оплата прошла успешно! Тебе начислено **{amount_ac} 🪙**.")
+        
+    elif payload == "buy_premium":
+        # Проверка, есть ли 100 монет
+        user = get_user(user_id, message.from_user.username or "User")
+        if user[2] >= 100:
+            update_balance(user_id, -100)
+            set_premium(user_id)
+            await message.answer("🎉 Поздравляем! Ты купил 👑 **Премиум статус** за 100 🪙!")
+        else:
+            await message.answer(f"❌ Недостаточно монет! У тебя {user[2]} 🪙, а нужно 100 🪙.")
+
+@dp.callback_query(F.data == "buy_premium")
+async def cb_buy_premium(callback: types.CallbackQuery):
+    # Эта кнопка просто создаст инвойс на 0 звёзд, но спишет 100 внутренних монет
+    # Для простоты сделаем проверку прямо тут
+    user = get_user(callback.from_user.id, callback.from_user.username or "User")
+    if user[3] == 1:
+        await callback.answer("У тебя уже есть Премиум!", show_alert=True)
+        return
+    
+    if user[2] >= 100:
+        update_balance(callback.from_user.id, -100)
+        set_premium(callback.from_user.id)
+        await callback.answer("🎉 Премиум куплен!", show_alert=True)
+        await callback.message.edit_text("✅ Поздравляем! Ты успешно приобрёл 👑 **Премиум статус**!")
+    else:
+        await callback.answer(f"Нужно 100 🪙, а у тебя {user[2]} 🪙. Копи или покупай за Звёзды!", show_alert=True)
+
+# ===== ЗАПУСК =====
+async def main():
+    await set_commands()
+    print("✅ Бот запущен и готов принимать Звёзды!")
+    await dp.start_polling(bot)
+
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(main())        reply_markup=keyboard
     )
 
 # ===== КОМАНДА /help =====
