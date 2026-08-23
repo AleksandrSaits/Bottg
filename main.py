@@ -2,20 +2,22 @@ import os
 import sqlite3
 import random
 import asyncio
-from datetime import datetime, timedelta
-from aiogram import Bot, Dispatcher, types, F, Router
+from datetime import datetime
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import BotCommand, InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 
 # ===== НАСТРОЙКИ =====
 TOKEN = "8614039525:AAF2c9BWQqwFWxLQKCrBH-4-2YEA41w8z-A"
-OWNER_ID = 8287969191 # ТВОЙ ID (узнай через @userinfobot)
+OWNER_ID = 8287969191; 7619093962  # ТВОЙ ID
 
 bot = Bot(token=TOKEN)
-dp = Dispatcher()
+storage = MemoryStorage()  # ВАЖНО для FSM!
+dp = Dispatcher(storage=storage)
 
 # ===== СИСТЕМА РАНГОВ =====
 RANKS = {
@@ -36,35 +38,35 @@ RANKS = {
         "name": "⚡ Линия Богов",
         "levels": [
             (0, "🧍 Смертный"),
-            (100, "🙏 Посвящённый"),
+            (100, " Посвящённый"),
             (500, "⚔️ Полубог"),
             (1500, "🛡️ Бог Войны"),
-            (3000, " Бог Мудрости"),
+            (3000, "📖 Бог Мудрости"),
             (6000, "🏛️ Олимпиец"),
             (12000, "👑 Верховный Бог"),
             (25000, "✨ Творец Миров"),
         ]
     },
     "earth": {
-        "name": " Линия Земли",
+        "name": "🌍 Линия Земли",
         "levels": [
             (0, "🚶 Странник"),
             (100, "⚔️ Воин"),
-            (500, "🛡️ Рыцарь"),
+            (500, "️ Рыцарь"),
             (1500, "🏰 Паладин"),
             (3000, " Герой"),
             (6000, "📖 Легенда"),
             (12000, "🏆 Чемпион"),
-            (25000, " Хранитель Мира"),
+            (25000, "🌟 Хранитель Мира"),
         ]
     },
     "shadow": {
         "name": "🌑 Линия Теней",
         "levels": [
-            (0, "️ Адепт"),
+            (0, "🌑 Адепт"),
             (100, "📖 Ученик"),
             (500, "🔮 Маг"),
-            (1500, "📕 Архимаг"),
+            (1500, " Архимаг"),
             (3000, "⚡ Чародей"),
             (6000, "💀 Некромант"),
             (12000, "👁️ Повелитель Теней"),
@@ -74,7 +76,6 @@ RANKS = {
 }
 
 def get_rank(coins, line="demon"):
-    """Получить ранг по количеству монет"""
     levels = RANKS[line]["levels"]
     current_rank = levels[0][1]
     for threshold, rank_name in levels:
@@ -85,7 +86,6 @@ def get_rank(coins, line="demon"):
     return current_rank
 
 def get_next_rank(coins, line="demon"):
-    """Получить следующий ранг"""
     levels = RANKS[line]["levels"]
     for threshold, rank_name in levels:
         if coins < threshold:
@@ -96,25 +96,18 @@ def get_next_rank(coins, line="demon"):
 def init_db():
     conn = sqlite3.connect('aspekt.db')
     cursor = conn.cursor()
-    
-    # Пользователи
     cursor.execute('''CREATE TABLE IF NOT EXISTS users 
                       (user_id INTEGER PRIMARY KEY, username TEXT, 
                        coins INTEGER DEFAULT 0, gems INTEGER DEFAULT 0,
                        is_premium INTEGER DEFAULT 0, last_daily TEXT,
                        rank_line TEXT DEFAULT 'demon', clan_id INTEGER)''')
-    
-    # Админы групп
     cursor.execute('''CREATE TABLE IF NOT EXISTS group_admins 
                       (group_id INTEGER, user_id INTEGER, role TEXT, 
                        UNIQUE(group_id, user_id))''')
-    
-    # Кланы
     cursor.execute('''CREATE TABLE IF NOT EXISTS clans 
                       (clan_id INTEGER PRIMARY KEY AUTOINCREMENT, 
                        name TEXT, owner_id INTEGER, 
                        coins INTEGER DEFAULT 0, members INTEGER DEFAULT 1)''')
-    
     conn.commit()
     conn.close()
 
@@ -186,7 +179,6 @@ def get_top_users(limit=10):
     conn.close()
     return top
 
-# ===== КЛАНЫ =====
 def create_clan(name, owner_id):
     conn = sqlite3.connect('aspekt.db')
     cursor = conn.cursor()
@@ -204,14 +196,6 @@ def get_clan(clan_id):
     clan = cursor.fetchone()
     conn.close()
     return clan
-
-def join_clan(user_id, clan_id):
-    conn = sqlite3.connect('aspekt.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET clan_id = ? WHERE user_id = ?", (clan_id, user_id))
-    cursor.execute("UPDATE clans SET members = members + 1 WHERE clan_id = ?", (clan_id,))
-    conn.commit()
-    conn.close()
 
 def leave_clan(user_id):
     conn = sqlite3.connect('aspekt.db')
@@ -255,15 +239,15 @@ async def set_commands():
         BotCommand(command='start', description=' Главное меню'),
         BotCommand(command='profile', description='👤 Мой профиль'),
         BotCommand(command='balance', description='💰 Баланс'),
-        BotCommand(command='daily', description='🎁 Ежедневный бонус'),
+        BotCommand(command='daily', description=' Ежедневный бонус'),
         BotCommand(command='casino', description='🎰 Казино'),
-        BotCommand(command='shop', description='🛒 Магазин'),
-        BotCommand(command='rank', description=' Мой ранг'),
+        BotCommand(command='shop', description=' Магазин'),
+        BotCommand(command='rank', description='📊 Мой ранг'),
         BotCommand(command='changerank', description='🔄 Сменить линию ранга'),
         BotCommand(command='clan', description='⚔️ Клан'),
         BotCommand(command='top', description='🏆 Топ игроков'),
         BotCommand(command='admins', description='👥 Администрация'),
-        BotCommand(command='help', description=' Помощь'),
+        BotCommand(command='help', description='❓ Помощь'),
     ]
     await bot.set_my_commands(commands)
 
@@ -275,16 +259,16 @@ def is_owner(user_id):
 async def cmd_start(message: types.Message):
     user = get_user(message.from_user.id, message.from_user.username)
     rank = get_rank(user[2], user[6])
-    premium_badge = "👑 PREMIUM | " if user[5] else ""
+    premium_badge = " PREMIUM | " if user[5] else ""
     owner_badge = "🔱 ВЛАДЕЛЕЦ | " if is_owner(message.from_user.id) else ""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Профиль", callback_data="profile")],
+        [InlineKeyboardButton(text=" Профиль", callback_data="profile")],
         [InlineKeyboardButton(text="💰 Баланс", callback_data="balance")],
         [InlineKeyboardButton(text="🎁 Daily", callback_data="daily"),
          InlineKeyboardButton(text="🎰 Казино", callback_data="casino")],
         [InlineKeyboardButton(text="🛒 Магазин", callback_data="shop"),
-         InlineKeyboardButton(text="📊 Ранг", callback_data="rank")],
+         InlineKeyboardButton(text=" Ранг", callback_data="rank")],
         [InlineKeyboardButton(text="⚔️ Клан", callback_data="clan"),
          InlineKeyboardButton(text="🏆 Топ", callback_data="top")],
         [InlineKeyboardButton(text=" Администрация", callback_data="admins_list")],
@@ -293,7 +277,7 @@ async def cmd_start(message: types.Message):
     
     if is_owner(message.from_user.id):
         keyboard.inline_keyboard.append([
-            InlineKeyboardButton(text="⚙️ АДМИН-ПАНЕЛЬ", callback_data="admin_panel")
+            InlineKeyboardButton(text="️ АДМИН-ПАНЕЛЬ", callback_data="admin_panel")
         ])
     
     caption = (
@@ -328,7 +312,7 @@ async def cmd_profile(message: types.Message):
     if next_threshold:
         progress = (user[2] / next_threshold) * 100
         text += f"📈 **До следующего ранга:** {next_threshold - user[2]} 🪙 ({progress:.1f}%)\n"
-        text += f" **Следующий ранг:** {next_rank}"
+        text += f"🎯 **Следующий ранг:** {next_rank}"
     
     await message.answer(text, parse_mode=ParseMode.MARKDOWN)
 
@@ -340,27 +324,27 @@ async def cb_profile(callback: types.CallbackQuery):
     clan = get_clan(user[7]) if user[7] else None
     
     text = (
-        f" **ПРОФИЛЬ**\n\n"
+        f"👤 **ПРОФИЛЬ**\n\n"
         f"**Имя:** {callback.from_user.full_name}\n"
         f"**Username:** @{callback.from_user.username or 'не указан'}\n\n"
         f"{rank}\n"
-        f" **Coins:** {user[2]}\n"
+        f"🪙 **Coins:** {user[2]}\n"
         f"💎 **Gems:** {user[3]}\n"
-        f" **Premium:** {'Да' if user[5] else 'Нет'}\n"
-        f"⚔️ **Клан:** {clan[1] if clan else 'Нет'}\n\n"
+        f"👑 **Premium:** {'Да' if user[5] else 'Нет'}\n"
+        f"️ **Клан:** {clan[1] if clan else 'Нет'}\n\n"
     )
     
     if next_threshold:
         progress = (user[2] / next_threshold) * 100
-        text += f" **До следующего ранга:** {next_threshold - user[2]} 🪙 ({progress:.1f}%)\n"
-        text += f" **Следующий ранг:** {next_rank}"
+        text += f"📈 **До следующего ранга:** {next_threshold - user[2]} 🪙 ({progress:.1f}%)\n"
+        text += f"🎯 **Следующий ранг:** {next_rank}"
     
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=" Сменить линию", callback_data="changerank")],
-            [InlineKeyboardButton(text="️ Назад", callback_data="back_to_menu")]
+            [InlineKeyboardButton(text="🔄 Сменить линию", callback_data="changerank")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
         ])
     )
     await callback.answer()
@@ -377,16 +361,16 @@ async def cmd_rank(message: types.Message):
         f"📊 **ТВОЙ РАНГ**\n\n"
         f"{line_name}\n"
         f"**Текущий:** {rank}\n"
-        f"🪙 **Coins:** {user[2]}\n\n"
+        f" **Coins:** {user[2]}\n\n"
     )
     
     if next_threshold:
         progress = (user[2] / next_threshold) * 100
         bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
-        text += f" **Прогресс:** [{bar}] {progress:.0f}%\n"
-        text += f"🎯 **Следующий:** {next_rank} ({next_threshold} 🪙)"
+        text += f"📈 **Прогресс:** [{bar}] {progress:.0f}%\n"
+        text += f" **Следующий:** {next_rank} ({next_threshold} 🪙)"
     else:
-        text += " **МАКСИМАЛЬНЫЙ РАНГ!**"
+        text += "🏆 **МАКСИМАЛЬНЫЙ РАНГ!**"
     
     await message.answer(text, parse_mode=ParseMode.MARKDOWN)
 
@@ -398,7 +382,7 @@ async def cb_rank(callback: types.CallbackQuery):
     next_threshold, next_rank = get_next_rank(user[2], user[6])
     
     text = (
-        f"📊 **ТВОЙ РАНГ**\n\n"
+        f" **ТВОЙ РАНГ**\n\n"
         f"{line_name}\n"
         f"**Текущий:** {rank}\n"
         f"🪙 **Coins:** {user[2]}\n\n"
@@ -407,8 +391,8 @@ async def cb_rank(callback: types.CallbackQuery):
     if next_threshold:
         progress = (user[2] / next_threshold) * 100
         bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
-        text += f"📈 **Прогресс:** [{bar}] {progress:.0f}%\n"
-        text += f" **Следующий:** {next_rank} ({next_threshold} 🪙)"
+        text += f" **Прогресс:** [{bar}] {progress:.0f}%\n"
+        text += f"🎯 **Следующий:** {next_rank} ({next_threshold} 🪙)"
     else:
         text += "🏆 **МАКСИМАЛЬНЫЙ РАНГ!**"
     
@@ -426,9 +410,9 @@ async def cb_rank(callback: types.CallbackQuery):
 @dp.message(Command('changerank'))
 async def cmd_changerank(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔥 Демоны", callback_data="line_demon"),
-         InlineKeyboardButton(text=" Боги", callback_data="line_god")],
-        [InlineKeyboardButton(text=" Земля", callback_data="line_earth"),
+        [InlineKeyboardButton(text=" Демоны", callback_data="line_demon"),
+         InlineKeyboardButton(text="⚡ Боги", callback_data="line_god")],
+        [InlineKeyboardButton(text="🌍 Земля", callback_data="line_earth"),
          InlineKeyboardButton(text="🌑 Тени", callback_data="line_shadow")],
     ])
     
@@ -498,7 +482,7 @@ async def cb_balance(callback: types.CallbackQuery):
         f"{rank}\n"
         f"🪙 **Coins:** {user[2]} (игровая)\n"
         f"💎 **Gems:** {user[3]} (донат)\n\n"
-        f" Coins: /daily, казино\n"
+        f"🪙 Coins: /daily, казино\n"
         f"💎 Gems: покупка за ⭐️",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -514,7 +498,7 @@ async def cmd_daily(message: types.Message):
     today = datetime.now().strftime("%Y-%m-%d")
     
     if user[5] == today:
-        await message.answer(" Ты уже забрал награду сегодня!\n\nПриходи завтра 🌅")
+        await message.answer("⏳ Ты уже забрал награду сегодня!\n\nПриходи завтра ")
         return
     
     reward = random.randint(100, 300)
@@ -528,8 +512,8 @@ async def cmd_daily(message: types.Message):
     
     await message.answer(
         f"🎉 **ЕЖЕДНЕВНАЯ НАГРАДА!**\n\n"
-        f"Ты получил **{reward} 🪙**\n\n"
-        f"Новый баланс: {user[2] + reward} 🪙"
+        f"Ты получил **{reward} **\n\n"
+        f"Новый баланс: {user[2] + reward} "
     )
 
 @dp.callback_query(F.data == "daily")
@@ -551,7 +535,7 @@ async def cb_daily(callback: types.CallbackQuery):
     conn.close()
     
     await callback.message.edit_text(
-        f" **ЕЖЕДНЕВНАЯ НАГРАДА!**\n\n"
+        f"🎉 **ЕЖЕДНЕВНАЯ НАГРАДА!**\n\n"
         f"Ты получил **{reward} 🪙**\n\n"
         f"Новый баланс: {user[2] + reward} 🪙",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -564,9 +548,9 @@ async def cb_daily(callback: types.CallbackQuery):
 @dp.message(Command('casino'))
 async def cmd_casino(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=" Красное (x2)", callback_data="bet_red"),
+        [InlineKeyboardButton(text="🔴 Красное (x2)", callback_data="bet_red"),
          InlineKeyboardButton(text="⚫ Чёрное (x2)", callback_data="bet_black")],
-        [InlineKeyboardButton(text=" Зелёное (x14)", callback_data="bet_green")],
+        [InlineKeyboardButton(text="🟢 Зелёное (x14)", callback_data="bet_green")],
     ])
     
     await message.answer(
@@ -574,8 +558,8 @@ async def cmd_casino(message: types.Message):
         "Выбери ставку:\n"
         "🔴 **Красное** — x2 (1-7)\n"
         "⚫ **Чёрное** — x2 (8-14)\n"
-        "🟢 **Зелёное** — x14 (0)\n\n"
-        "Минимальная ставка: 10 ",
+        " **Зелёное** — x14 (0)\n\n"
+        "Минимальная ставка: 10 🪙",
         reply_markup=keyboard
     )
 
@@ -589,9 +573,9 @@ async def cb_casino(callback: types.CallbackQuery):
     ])
     
     await callback.message.edit_text(
-        "🎰 **КАЗИНО**\n\n"
+        " **КАЗИНО**\n\n"
         "Выбери ставку:\n"
-        "🔴 **Красное** — x2 (1-7)\n"
+        " **Красное** — x2 (1-7)\n"
         "⚫ **Чёрное** — x2 (8-14)\n"
         "🟢 **Зелёное** — x14 (0)\n\n"
         "Минимальная ставка: 10 🪙",
@@ -608,87 +592,90 @@ async def process_bet(callback: types.CallbackQuery):
         return
     
     color_choice = callback.data.split("_")[1]
-    color_name = "🔴 Красное" if color_choice == "red" else " Чёрное" if color_choice == "black" else "🟢 Зелёное"
+    color_name = "🔴 Красное" if color_choice == "red" else "⚫ Чёрное" if color_choice == "black" else "🟢 Зелёное"
     
     await callback.message.edit_text(
-        f" **Введите сумму ставки:**\n\n"
+        f"💰 **Введите сумму ставки:**\n\n"
         f"Твой баланс: {user[2]} 🪙\n"
         f"Выбрано: {color_name}\n\n"
         f"*(Напиши число в чат)*"
     )
     await callback.answer()
 
-@dp.message()
-async def handle_bet_amount(message: types.Message):
-    if not message.text or not message.text.isdigit():
-        return
+# ВАЖНО: проверяем что это НЕ команда и НЕ текст из админки
+@dp.message(F.text & ~F.text.startswith('/'))
+async def handle_bet_amount(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
     
-    bet_amount = int(message.text)
-    user = get_user(message.from_user.id, message.from_user.username)
-    
-    if bet_amount < 10:
-        await message.answer(" Минимальная ставка: 10 🪙")
-        return
-    
-    if bet_amount > user[2]:
-        await message.answer("❌ Недостаточно средств!")
-        return
-    
-    update_coins(message.from_user.id, -bet_amount)
-    
-    # АНИМАЦИЯ
-    emojis = ["🎰", "🔴", "⚫", "🟢", "🎲"]
-    for i in range(10):
-        emoji = random.choice(emojis)
-        num = random.randint(0, 14)
-        await message.edit_text(
-            f"🎰 **КРУТИМ РУЛЕТКУ...** {emoji}\n\n"
-            f"Ставка: {bet_amount} \n"
-            f"Число: {num}\n\n"
-            f"{'' if num <= 7 else '' if num >= 8 else '🟢'}"
-        )
-        await asyncio.sleep(0.3)
-    
-    result = random.randint(0, 14)
-    
-    if result == 0:
-        color, emoji, color_name = "green", "🟢", "ЗЕЛЁНОЕ"
-    elif result <= 7:
-        color, emoji, color_name = "red", "🔴", "КРАСНОЕ"
-    else:
-        color, emoji, color_name = "black", "⚫", "ЧЁРНОЕ"
-    
-    win = random.choice([True, False])
-    
-    if win:
-        win_amount = bet_amount * 2
-        update_coins(message.from_user.id, win_amount)
-        new_balance = user[2] - bet_amount + win_amount
+    # Если мы в состоянии ожидания ставки казино
+    if current_state is None and message.text.isdigit():
+        bet_amount = int(message.text)
+        user = get_user(message.from_user.id, message.from_user.username)
         
-        await message.edit_text(
-            f"🎰 **РЕЗУЛЬТАТ:** {emoji} {color_name}\n\n"
-            f"🎉 **ТЫ ВЫИГРАЛ!**\n\n"
-            f"Ставка: {bet_amount} \n"
-            f"Выигрыш: {win_amount} 🪙 (x2)\n"
-            f"Новый баланс: {new_balance} 🪙",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🎰 Ещё раз", callback_data="casino"),
-                 InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")]
-            ])
-        )
-    else:
-        new_balance = user[2] - bet_amount
+        if bet_amount < 10:
+            await message.answer(" Минимальная ставка: 10 🪙")
+            return
         
-        await message.edit_text(
-            f"🎰 **РЕЗУЛЬТАТ:** {emoji} {color_name}\n\n"
-            f"😔 **ПРОИГРЫШ**\n\n"
-            f"Ставка: {bet_amount} 🪙\n"
-            f"Остаток: {new_balance} 🪙",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🎰 Ещё раз", callback_data="casino"),
-                 InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")]
-            ])
-        )
+        if bet_amount > user[2]:
+            await message.answer("❌ Недостаточно средств!")
+            return
+        
+        update_coins(message.from_user.id, -bet_amount)
+        
+        # АНИМАЦИЯ РУЛЕТКИ
+        emojis = ["🎰", "🔴", "", "🟢", "🎲"]
+        for i in range(10):
+            emoji = random.choice(emojis)
+            num = random.randint(0, 14)
+            await message.edit_text(
+                f"🎰 **КРУТИМ РУЛЕТКУ...** {emoji}\n\n"
+                f"Ставка: {bet_amount} 🪙\n"
+                f"Число: {num}\n\n"
+                f"{'🔴' if num <= 7 else '⚫' if num >= 8 else '🟢'}"
+            )
+            await asyncio.sleep(0.3)
+        
+        result = random.randint(0, 14)
+        
+        if result == 0:
+            color, emoji, color_name = "green", "🟢", "ЗЕЛЁНОЕ"
+        elif result <= 7:
+            color, emoji, color_name = "red", "🔴", "КРАСНОЕ"
+        else:
+            color, emoji, color_name = "black", "⚫", "ЧЁРНОЕ"
+        
+        # Проверяем выигрыш (50/50 для простоты)
+        win = random.choice([True, False])
+        
+        if win:
+            win_amount = bet_amount * 2
+            update_coins(message.from_user.id, win_amount)
+            new_balance = user[2] - bet_amount + win_amount
+            
+            await message.edit_text(
+                f"🎰 **РЕЗУЛЬТАТ:** {emoji} {color_name}\n\n"
+                f"🎉 **ТЫ ВЫИГРАЛ!**\n\n"
+                f"Ставка: {bet_amount} 🪙\n"
+                f"Выигрыш: {win_amount}  (x2)\n"
+                f"Новый баланс: {new_balance} 🪙",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🎰 Ещё раз", callback_data="casino"),
+                     InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")]
+                ])
+            )
+        else:
+            new_balance = user[2] - bet_amount
+            
+            await message.edit_text(
+                f" **РЕЗУЛЬТАТ:** {emoji} {color_name}\n\n"
+                f"😔 **ПРОИГРЫШ**\n\n"
+                f"Ставка: {bet_amount} 🪙\n"
+                f"Остаток: {new_balance} 🪙",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🎰 Ещё раз", callback_data="casino"),
+                     InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")]
+                ])
+            )
 
 # ===== МАГАЗИН =====
 @dp.message(Command('shop'))
@@ -702,10 +689,10 @@ async def cmd_shop(message: types.Message):
     await message.answer(
         "🛒 **МАГАЗИН GEMS**\n\n"
         "💎 **Курс:** 1 ⭐️ = 100 💎\n\n"
-        "👑 **PREMIUM:** 500 💎\n"
+        " **PREMIUM:** 500 \n"
         "_Особый статус и привилегии_\n\n"
-        "🪙 Coins — для игр\n"
-        "💎 Gems — для премиума",
+        " Coins — для игр\n"
+        " Gems — для премиума",
         reply_markup=keyboard
     )
 
@@ -715,16 +702,16 @@ async def cb_shop(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="⭐️ 100 💎 за 1 Звезду", callback_data="buy_100gems")],
         [InlineKeyboardButton(text="⭐️ 500 💎 за 5 Звёзд", callback_data="buy_500gems")],
         [InlineKeyboardButton(text="👑 PREMIUM (500 💎)", callback_data="buy_premium")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")],
+        [InlineKeyboardButton(text="️ Назад", callback_data="back_to_menu")],
     ])
     
     await callback.message.edit_text(
         "🛒 **МАГАЗИН GEMS**\n\n"
         "💎 **Курс:** 1 ⭐️ = 100 💎\n\n"
-        "👑 **PREMIUM:** 500 💎\n"
+        " **PREMIUM:** 500 \n"
         "_Особый статус и привилегии_\n\n"
-        "🪙 Coins — для игр\n"
-        "💎 Gems — для премиума",
+        " Coins — для игр\n"
+        " Gems — для премиума",
         reply_markup=keyboard
     )
     await callback.answer()
@@ -736,7 +723,7 @@ async def process_buy_stars(callback: types.CallbackQuery):
     
     await callback.message.answer_invoice(
         title=f"Покупка {amount_gems} Gems",
-        description=f"Оплата {stars_cost} Telegram Звёздами ️",
+        description=f"Оплата {stars_cost} Telegram Звёздами ⭐️",
         payload=f"buy_gems_{amount_gems}",
         provider_token="",
         currency="XTR",
@@ -760,7 +747,7 @@ async def on_successful_payment(message: types.Message):
         await message.answer(
             f"✅ **Оплата прошла!**\n\n"
             f"Тебе начислено **{amount_gems} 💎**\n\n"
-            f"Баланс Gems: {user[3]} 💎"
+            f"Баланс Gems: {user[3]} "
         )
 
 @dp.callback_query(F.data == "buy_premium")
@@ -775,7 +762,7 @@ async def cb_buy_premium(callback: types.CallbackQuery):
         update_gems(callback.from_user.id, -500)
         set_premium(callback.from_user.id)
         await callback.message.edit_text(
-            "🎉 **ПОЗДРАВЛЯЕМ!**\n\n"
+            " **ПОЗДРАВЛЯЕМ!**\n\n"
             "👑 **PREMIUM статус** активирован!\n\n"
             "Теперь ты особенный! 💎",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -794,23 +781,23 @@ async def cmd_clan(message: types.Message):
     
     if clan:
         text = (
-            f"⚔️ **ТВОЙ КЛАН**\n\n"
+            f"️ **ТВОЙ КЛАН**\n\n"
             f"**Название:** {clan[1]}\n"
-            f"👑 **Владелец:** {clan[2]}\n"
-            f"🪙 **Казна:** {clan[3]} 🪙\n"
-            f"👥 **Участников:** {clan[4]}\n"
+            f" **Владелец ID:** {clan[2]}\n"
+            f" **Казна:** {clan[3]} 🪙\n"
+            f" **Участников:** {clan[4]}\n"
         )
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=" Выйти из клана", callback_data="clan_leave")],
+            [InlineKeyboardButton(text="🚪 Выйти из клана", callback_data="clan_leave")],
         ])
     else:
         text = (
-            f"⚔️ **КЛАН**\n\n"
+            f"️ **КЛАН**\n\n"
             f"Ты не состоишь в клане.\n\n"
-            f"Создай свой клан за **1000 🪙**!"
+            f"Создай свой клан за **1000 **!"
         )
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=" Создать клан", callback_data="clan_create")],
+            [InlineKeyboardButton(text="➕ Создать клан", callback_data="clan_create")],
         ])
     
     await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -824,7 +811,7 @@ async def cb_clan(callback: types.CallbackQuery):
         text = (
             f"⚔️ **ТВОЙ КЛАН**\n\n"
             f"**Название:** {clan[1]}\n"
-            f"👑 **Владелец:** {clan[2]}\n"
+            f"👑 **Владелец ID:** {clan[2]}\n"
             f"🪙 **Казна:** {clan[3]} 🪙\n"
             f"👥 **Участников:** {clan[4]}\n"
         )
@@ -834,13 +821,13 @@ async def cb_clan(callback: types.CallbackQuery):
         ])
     else:
         text = (
-            f"️ **КЛАН**\n\n"
+            f"⚔️ **КЛАН**\n\n"
             f"Ты не состоишь в клане.\n\n"
-            f"Создай свой клан за **1000 🪙**!"
+            f"Создай свой клан за **1000 **!"
         )
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="➕ Создать клан", callback_data="clan_create")],
-            [InlineKeyboardButton(text="️ Назад", callback_data="back_to_menu")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")],
         ])
     
     await callback.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
@@ -855,11 +842,12 @@ async def cb_clan_create(callback: types.CallbackQuery):
         return
     
     await callback.message.edit_text(
-        " **СОЗДАНИЕ КЛАНА**\n\n"
+        "➕ **СОЗДАНИЕ КЛАНА**\n\n"
         "Напиши название клана:\n"
         "*(Отмени командой /cancel)*"
     )
     await callback.answer()
+    await ClanStates.waiting_create.set()
 
 @dp.message(ClanStates.waiting_create)
 async def process_clan_create(message: types.Message, state: FSMContext):
@@ -878,7 +866,7 @@ async def process_clan_create(message: types.Message, state: FSMContext):
         f"✅ **Клан создан!**\n\n"
         f"**Название:** {name}\n"
         f"**ID:** {clan_id}\n\n"
-        f"Списано: 1000 🪙",
+        f"Списано: 1000 ",
         parse_mode=ParseMode.MARKDOWN
     )
     await state.clear()
@@ -887,7 +875,7 @@ async def process_clan_create(message: types.Message, state: FSMContext):
 async def cb_clan_leave(callback: types.CallbackQuery):
     leave_clan(callback.from_user.id)
     await callback.message.edit_text(
-        "🚪 **Ты вышел из клана!**",
+        " **Ты вышел из клана!**",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_menu")]
         ])
@@ -911,7 +899,7 @@ async def cmd_top(message: types.Message):
 async def cb_top(callback: types.CallbackQuery):
     top = get_top_users(10)
     
-    text = "🏆 **ТОП-10 ИГРОКОВ**\n\n"
+    text = " **ТОП-10 ИГРОКОВ**\n\n"
     for i, (username, coins, line) in enumerate(top, 1):
         medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
         rank = get_rank(coins, line)
@@ -1043,14 +1031,14 @@ async def cmd_addadmin(message: types.Message):
 @dp.message(Command('admin'))
 async def cmd_admin(message: types.Message):
     if not is_owner(message.from_user.id):
-        await message.answer(" Доступ запрещён!")
+        await message.answer("⛔ Доступ запрещён!")
         return
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast")],
         [InlineKeyboardButton(text="💰 Добавить Coins", callback_data="admin_addcoins")],
-        [InlineKeyboardButton(text=" Добавить Gems", callback_data="admin_addgems")],
+        [InlineKeyboardButton(text="💎 Добавить Gems", callback_data="admin_addgems")],
         [InlineKeyboardButton(text=" Пользователи", callback_data="admin_users")],
     ])
     
@@ -1096,14 +1084,31 @@ async def cb_admin_stats(callback: types.CallbackQuery):
     await callback.message.edit_text(
         f"📊 **СТАТИСТИКА БОТА**\n\n"
         f"👥 **Всего пользователей:** {len(users)}\n"
-        f" **Premium:** {premium_count}\n"
+        f"👑 **Premium:** {premium_count}\n"
         f"🪙 **Всего Coins:** {total_coins}\n"
-        f" **Всего Gems:** {total_gems}",
+        f"💎 **Всего Gems:** {total_gems}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="◀️ Назад", callback_data="admin_panel")]
         ])
     )
     await callback.answer()
+
+@dp.callback_query(F.data == "admin_broadcast")
+async def cb_admin_broadcast(callback: types.CallbackQuery):
+    if not is_owner(callback.from_user.id):
+        await callback.answer("", show_alert=True)
+        return
+    
+    await callback.message.edit_text(
+        "📢 **РАССЫЛКА**\n\n"
+        "Напиши текст сообщения для рассылки всем пользователям.\n\n"
+        "*(Отмени: /cancel)*",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="admin_panel")]
+        ])
+    )
+    await callback.answer()
+    await AdminStates.waiting_broadcast.set()
 
 @dp.callback_query(F.data == "admin_addcoins")
 async def cb_admin_addcoins(callback: types.CallbackQuery):
@@ -1121,6 +1126,7 @@ async def cb_admin_addcoins(callback: types.CallbackQuery):
         ])
     )
     await callback.answer()
+    await AdminStates.waiting_addcoins.set()
 
 @dp.callback_query(F.data == "admin_addgems")
 async def cb_admin_addgems(callback: types.CallbackQuery):
@@ -1138,6 +1144,7 @@ async def cb_admin_addgems(callback: types.CallbackQuery):
         ])
     )
     await callback.answer()
+    await AdminStates.waiting_addgems.set()
 
 @dp.callback_query(F.data == "admin_users")
 async def cb_admin_users(callback: types.CallbackQuery):
@@ -1147,10 +1154,10 @@ async def cb_admin_users(callback: types.CallbackQuery):
     
     users = get_all_users()[:20]
     
-    text = " **ПОСЛЕДНИЕ ПОЛЬЗОВАТЕЛИ:**\n\n"
+    text = "👥 **ПОСЛЕДНИЕ ПОЛЬЗОВАТЕЛИ:**\n\n"
     for user in users:
         rank = get_rank(user[2], user[6])
-        text += f"• {user[1] or 'Аноним'}: {user[2]}🪙 {rank}\n"
+        text += f"• {user[1] or 'Аноним'}: {user[2]} {rank}\n"
     
     await callback.message.edit_text(
         text,
@@ -1160,41 +1167,103 @@ async def cb_admin_users(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-# ===== ОБРАБОТКА АДМИН-КОМАНД =====
-@dp.message()
-async def handle_admin_commands(message: types.Message):
+# ===== ОБРАБОТКА FSM СОСТОЯНИЙ АДМИНКИ =====
+@dp.message(AdminStates.waiting_addcoins)
+async def handle_addcoins(message: types.Message, state: FSMContext):
     if not is_owner(message.from_user.id):
+        await state.clear()
         return
     
-    text = message.text or ""
+    text = message.text.strip()
+    parts = text.split()
     
-    # Добавить Coins
-    if text.startswith('/addcoins ') or (message.reply_to_message and text.isdigit()):
-        parts = text.replace('/addcoins ', '').split()
-        if len(parts) == 2:
-            username = parts[0].lstrip('@')
-            amount = int(parts[1])
-            user = get_user_by_username(username)
-            if user:
-                update_coins(user[0], amount)
-                await message.answer(f"✅ Начислено {amount} 🪙 пользователю @{username}")
-            else:
-                await message.answer("❌ Пользователь не найден!")
+    if len(parts) != 2:
+        await message.answer("❌ Формат: @username сумма\nПример: @Mr_V3ktor 12000")
         return
     
-    # Добавить Gems
-    if text.startswith('/addgems '):
-        parts = text.replace('/addgems ', '').split()
-        if len(parts) == 2:
-            username = parts[0].lstrip('@')
-            amount = int(parts[1])
-            user = get_user_by_username(username)
-            if user:
-                update_gems(user[0], amount)
-                await message.answer(f"✅ Начислено {amount} 💎 пользователю @{username}")
-            else:
-                await message.answer("❌ Пользователь не найден!")
+    username = parts[0].lstrip('@')
+    try:
+        amount = int(parts[1])
+    except ValueError:
+        await message.answer("❌ Сумма должна быть числом!")
         return
+    
+    user = get_user_by_username(username)
+    if not user:
+        await message.answer(f"❌ Пользователь @{username} не найден!")
+        await state.clear()
+        return
+    
+    update_coins(user[0], amount)
+    await message.answer(f"✅ Начислено **{amount} 🪙** пользователю **@{username}**", parse_mode=ParseMode.MARKDOWN)
+    await state.clear()
+
+@dp.message(AdminStates.waiting_addgems)
+async def handle_addgems(message: types.Message, state: FSMContext):
+    if not is_owner(message.from_user.id):
+        await state.clear()
+        return
+    
+    text = message.text.strip()
+    parts = text.split()
+    
+    if len(parts) != 2:
+        await message.answer("❌ Формат: @username сумма\nПример: @Mr_V3ktor 500")
+        return
+    
+    username = parts[0].lstrip('@')
+    try:
+        amount = int(parts[1])
+    except ValueError:
+        await message.answer(" Сумма должна быть числом!")
+        return
+    
+    user = get_user_by_username(username)
+    if not user:
+        await message.answer(f" Пользователь @{username} не найден!")
+        await state.clear()
+        return
+    
+    update_gems(user[0], amount)
+    await message.answer(f"✅ Начислено **{amount} 💎** пользователю **@{username}**", parse_mode=ParseMode.MARKDOWN)
+    await state.clear()
+
+@dp.message(AdminStates.waiting_broadcast)
+async def handle_broadcast(message: types.Message, state: FSMContext):
+    if not is_owner(message.from_user.id):
+        await state.clear()
+        return
+    
+    broadcast_text = message.text
+    users = get_all_users()
+    
+    sent = 0
+    failed = 0
+    
+    for user in users:
+        try:
+            await bot.send_message(user[0], f"📢 **РАССЫЛКА ОТ ВЛАДЕЛЬЦА:**\n\n{broadcast_text}", parse_mode=ParseMode.MARKDOWN)
+            sent += 1
+        except:
+            failed += 1
+    
+    await message.answer(
+        f"✅ **Рассылка завершена!**\n\n"
+        f" Отправлено: {sent}\n"
+        f"❌ Ошибок: {failed}",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    await state.clear()
+
+# ===== ОТМЕНА =====
+@dp.message(Command('cancel'))
+async def cmd_cancel(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state:
+        await state.clear()
+        await message.answer("✅ Операция отменена.")
+    else:
+        await message.answer("Нет активной операции для отмены.")
 
 # ===== ПОМОЩЬ =====
 @dp.message(Command('help'))
@@ -1202,11 +1271,11 @@ async def cmd_help(message: types.Message):
     await message.answer(
         "❓ **ПОМОЩЬ**\n\n"
         "🏠 /start — Главное меню\n"
-        " /profile — Мой профиль\n"
+        "👤 /profile — Мой профиль\n"
         "💰 /balance — Баланс\n"
         "🎁 /daily — Ежедневный бонус\n"
         "🎰 /casino — Казино\n"
-        " /shop — Магазин\n"
+        "🛒 /shop — Магазин\n"
         "📊 /rank — Мой ранг\n"
         "🔄 /changerank — Сменить линию\n"
         "⚔️ /clan — Клан\n"
@@ -1220,15 +1289,15 @@ async def cmd_help(message: types.Message):
 async def cb_help(callback: types.CallbackQuery):
     await callback.message.edit_text(
         "❓ **ПОМОЩЬ**\n\n"
-        " /start — Главное меню\n"
+        "🏠 /start — Главное меню\n"
         "👤 /profile — Мой профиль\n"
         "💰 /balance — Баланс\n"
-        "🎁 /daily — Ежедневный бонус\n"
+        " /daily — Ежедневный бонус\n"
         "🎰 /casino — Казино\n"
         "🛒 /shop — Магазин\n"
-        " /rank — Мой ранг\n"
+        "📊 /rank — Мой ранг\n"
         "🔄 /changerank — Сменить линию\n"
-        "⚔️ /clan — Клан\n"
+        "️ /clan — Клан\n"
         "🏆 /top — Топ игроков\n"
         "👥 /admins — Администрация\n"
         "❓ /help — Эта справка\n\n"
@@ -1244,29 +1313,29 @@ async def cb_help(callback: types.CallbackQuery):
 async def cb_back_to_menu(callback: types.CallbackQuery):
     user = get_user(callback.from_user.id, callback.from_user.username)
     rank = get_rank(user[2], user[6])
-    premium_badge = "👑 PREMIUM | " if user[5] else ""
-    owner_badge = " ВЛАДЕЛЕЦ | " if is_owner(callback.from_user.id) else ""
+    premium_badge = " PREMIUM | " if user[5] else ""
+    owner_badge = "🔱 ВЛАДЕЛЕЦ | " if is_owner(callback.from_user.id) else ""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Профиль", callback_data="profile")],
+        [InlineKeyboardButton(text=" Профиль", callback_data="profile")],
         [InlineKeyboardButton(text="💰 Баланс", callback_data="balance")],
         [InlineKeyboardButton(text="🎁 Daily", callback_data="daily"),
          InlineKeyboardButton(text="🎰 Казино", callback_data="casino")],
-        [InlineKeyboardButton(text=" Магазин", callback_data="shop"),
-         InlineKeyboardButton(text="📊 Ранг", callback_data="rank")],
+        [InlineKeyboardButton(text="🛒 Магазин", callback_data="shop"),
+         InlineKeyboardButton(text=" Ранг", callback_data="rank")],
         [InlineKeyboardButton(text="⚔️ Клан", callback_data="clan"),
          InlineKeyboardButton(text="🏆 Топ", callback_data="top")],
-        [InlineKeyboardButton(text="👥 Администрация", callback_data="admins_list")],
+        [InlineKeyboardButton(text=" Администрация", callback_data="admins_list")],
         [InlineKeyboardButton(text="❓ Помощь", callback_data="help")],
     ])
     
     if is_owner(callback.from_user.id):
         keyboard.inline_keyboard.append([
-            InlineKeyboardButton(text="⚙️ АДМИН-ПАНЕЛЬ", callback_data="admin_panel")
+            InlineKeyboardButton(text="️ АДМИН-ПАНЕЛЬ", callback_data="admin_panel")
         ])
     
     await callback.message.edit_text(
-        f"👋 {owner_badge}{premium_badge}С возвращением, **{callback.from_user.full_name}**!\n\n"
+        f" {owner_badge}{premium_badge}С возвращением, **{callback.from_user.full_name}**!\n\n"
         f"{rank}\n"
         f"🪙 **Coins:** {user[2]}\n"
         f"💎 **Gems:** {user[3]}\n\n"
